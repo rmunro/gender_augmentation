@@ -1,12 +1,20 @@
 import sys
 import re
 import collections
+import os
 from collections import defaultdict    
 import bert_predictions
 
 
-seed_data = "new_sentences.conllu"
-reference_data = "Universal Dependencies 2.4/ud-treebanks-v2.4/UD_English-LinES/en_lines-ud-train.conllu"
+seed_data = "./new_sentences.conllu"
+reference_data = "./ud-treebanks-v2.4/UD_English-LinES/en_lines-ud-train.conllu"
+
+if not os.path.exists(seed_data):
+    print("No file found: "+seed_data+"\nThis should contain your starting files")
+
+if not os.path.exists(reference_data):
+    print("No file found: "+reference_data+"\nTry downloading via:\ncurl --remote-name-all https://lindat.mff.cuni.cz/repository/xmlui/bitstream/handle/11234/1-2988{/ud-treebanks-v2.4.tgz,/ud-documentation-v2.4.tgz,/ud-tools-v2.4.tgz}")
+
 
 # all replacements for the example sentences
 pronouns = [
@@ -50,6 +58,49 @@ def get_parent(word, lines):
             return fields[1]
             
     
+
+def get_sentence(lines):
+    '''Gets the text sentence from the lines
+    
+    '''
+    
+    text_sentence = ""
+    
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) >= 9:
+            text_sentence += fields[1]
+            if "SpaceAfter=No" not in fields[9]:
+                text_sentence += " "
+    return text_sentence
+   
+    
+def replace_in_sentence(lines, replacements, case_sensitive=False):
+    '''replaces the given token with it the replacement in lines
+    
+    '''
+    
+    new_lines = ""
+    
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) >= 9:
+            cur_token = fields[1]
+            for token in replacements:
+                replacement = replacements[token]
+                if (cur_token == token or 
+                            (not case_sensitive and 
+                            cur_token.lower() == token.lower)):
+                    fields[1] = replacement
+        new_line = "\t".join(fields)
+        
+    new_sentence = get_sentence(new_lines)
+    for i in range(0, len(new_lines)):
+        line = new_lines[i]
+        line.startswith("# text = ")
+        new_lines[i] = "# text = "+new_sentence
+        
+    return new_lines
     
 
 
@@ -101,9 +152,7 @@ while line:
     # print(line)
     if line.startswith("# sent_id = "):
         if sent_id > 0: 
-            all_sentences += "".join(current_lines)
-            # all_sentences += replace_pronouns(current_lines)
-            # all_sentences += replace_objects(current_lines)
+            all_sentences += "".join(current_lines)            
             
             parent = get_parent("hers", current_lines)     
             relations = get_dependents(parent, current_lines)
@@ -147,14 +196,20 @@ while line:
                         # for each pronoun variation
                         new_text = text
                         new_previous = previous
+                        
+                        replacements = {}
                         for replacement in pronoun:
                             new_word = pronoun[replacement]
-                            new_text = new_text.replace(replacement, new_word)
+                            replacements[replacement] = new_word                            
+                            # new_text = new_text.replace(replacement, new_word)
                             new_previous = new_previous.replace(replacement, new_word)
                             
-                        # TODO REPLACE WITH TOKEN-LEVEL SUBSTITUTION
-                        new_text = new_text.replace(relation, variation)
-                        new_previous = new_previous.replace(relation, variation)
+                        replacements[relation] = variation
+                        # TODO GET POS AND OTHER TAGS FROM REFERERENCE DB FOR relation
+                        # MAKE SURE THOSE GET COPIED OVER FOR PRONOUNS TOO
+                        new_lines = replace_in_sentence(current_lines, replacements)
+                        next_text = get_sentence(new_lines)
+                        
                         if seen_sentences[new_text] == 0:
                             seen_sentences[new_text] = 1
                             
