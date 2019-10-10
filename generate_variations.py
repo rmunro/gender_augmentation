@@ -104,7 +104,7 @@ def replace_in_sentence(lines, replacements, case_sensitive=False):
     for i in range(0, len(new_lines)):
         line = new_lines[i]
         if line.startswith("# text = "):
-        	new_lines[i] = "# text = "+new_sentence
+            new_lines[i] = "# text = "+new_sentence
         
     return new_lines
     
@@ -217,7 +217,7 @@ while line:
                         new_text = get_sentence(new_lines)
                         
                         
-                        # print("CANDIDATE: "+new_text+" replacing "+relation+" with "+variation)
+                        print("CANDIDATE: "+new_text+" replacing "+relation+" with "+variation)
                         # print(str(new_lines))
                         if seen_sentences[new_text] == 0:
                             seen_sentences[new_text] = 1
