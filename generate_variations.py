@@ -4,14 +4,11 @@ import collections
 from collections import defaultdict    
 import bert_predictions
 
-'''
-import torch
-import torch.nn as nn
-from transformers import BertTokenizer, BertModel, BertForMaskedLM
-# import logging
-# logging.basicConfig(level=logging.INFO)
-'''
 
+seed_data = "new_sentences.conllu"
+reference_data = "Universal Dependencies 2.4/ud-treebanks-v2.4/UD_English-LinES/en_lines-ud-train.conllu"
+
+# all replacements for the example sentences
 pronouns = [
 {"hers":"hers", "she":"she","Gender=Fem":"Gender=Fem"},
 {"hers":"his", "she":"he","Gender=Fem":"Gender=Masc"},
@@ -20,73 +17,7 @@ pronouns = [
 {"hers":"yours", "she":"you", "Gender=Fem":"Gender=Neut", "Person=3":"Person=2", "Alex's":"my"}
 ]
 
-objects = [
-    {"car":"cat",  # noun
-    "drive":"sleep",  # irregular verb pres
-    "drove":"slept",  # irregular verb past
-    "responsive":"quiet",  # adj2
-    "accelerated":"played",   # regular verb past
-    "accelerate":"play",  # regular verb pres
-    "hit":"chase", # regular verb trans
-    "bump":"toy", # noun
-    "paint":"food", # noun2
-    "dealer":"vet", # noun agent
-    "Dealer":"Vet", # noun agent (sentence initial)
-    "clean":"brush",  # regular verb trans pres
-    "easily":"regularly", # adv
-    "easy":"regular", # adv root
-    "quick":"obedient",  # adj
-    "sell":"come", # irregular verb pres
-    "sold":"came" # irregular verb past
-    },
-    {"car":"singer",  # noun
-    "drive":"weep",  # irregular verb pres
-    "drove":"wept",  # irregular verb past
-    "responsive":"open",  # adj2
-    "accelerated":"practiced",   # regular verb past
-    "accelerate":"practive",  # regular verb pres
-    "hit":"book", # regular verb trans pres
-    "bump":"show", # noun
-    "paint":"music", # noun2
-    "dealer":"producer", # noun agent
-    "Dealer":"Producer", # noun agent (sentence initial)
-    "clean":"train",  # regular verb 
-    "easily":"diligently", # adv
-    "easy":"diligent", # adv root
-    "quick":"loud",  # adj
-    "sell":"sing", # irregular verb pres
-    "sold":"sang" # irregular verb past
-    }    
-        
-]
-
-
 all_sentences = "" # all sentences, old and new
-
-def replace_pronouns(lines):
-    new_lines = ""
-    for pronoun in pronouns:
-        for line in lines:
-            for old_pronoun in pronoun:
-                new_pronoun = pronoun[old_pronoun]
-                line = line.replace(old_pronoun, new_pronoun)
-            new_lines += line
-    return new_lines
-
-
-def replace_objects(lines):
-    new_lines = ""
-    sets = objects
-    for set in sets:
-        for line in lines:
-            for substitute in set:
-                new = set[substitute]
-                line = line.replace(substitute, new)
-            new_lines += line
-    return new_lines
-
-
-       
 
 sent_id = 0 # current sentence id
 text = ""
@@ -146,7 +77,27 @@ def get_dependents(word, lines, word_number="-1"):
     return dependents
 
 
-for line in sys.stdin:
+reference_dependencies = defaultdict(lambda: defaultdict(lambda: 0))
+
+fp = open(reference_data, 'r')
+line = fp.readline()
+c=1
+while line:
+    fields = line.split("\t")
+    if len(fields) > 5 :
+        word = fields[1]
+        constants = fields[3]+"\t"+fields[4]+"\t"+fields[5]
+        reference_dependencies[word][constants]+=1
+    c+=1
+    line = fp.readline()
+fp.close()
+
+
+seen_sentences = defaultdict(lambda: 0)
+
+fp = open(seed_data, 'r')
+line = fp.readline()
+while line:
     # print(line)
     if line.startswith("# sent_id = "):
         if sent_id > 0: 
@@ -154,41 +105,64 @@ for line in sys.stdin:
             # all_sentences += replace_pronouns(current_lines)
             # all_sentences += replace_objects(current_lines)
             
-            print(current_lines)
             parent = get_parent("hers", current_lines)     
-            print(parent)               
             relations = get_dependents(parent, current_lines)
             relations.append(parent)
-            print("relations: "+str(relations))
+            print("relations: "+str(relations)+" in "+text)
+
+            # new varia
+            sentence_variations = defaultdict(lambda: defaultdict(lambda: 0))
            
             for pronoun in pronouns:
-                new_pronoun = pronoun["hers"]
-                new_text = text.replace("hers", new_pronoun)
+                new_text = text
+                new_previous = previous
+                for replacement in pronoun:
+                    new_word = pronoun[replacement]
+                    new_text = new_text.replace(replacement, new_word)
+                    new_previous = new_previous.replace(replacement, new_word)
+                    seen_sentences[new_text] += 1
 
                 new_relations = []
                 for relation in relations:
-                    if relation == "hers":
-                        new_relations.append(new_pronoun.lower())
-                    else:
+                    if relation != "hers":
+                        #skip the actual pronoun: we are controlling for its variation
                         new_relations.append(relation.lower())
                                     
                 for relation in new_relations:
-                    variations = bert_predictions.extract_bert_predictions(new_text, previous, relation, True)
-                    print(relation)
-                    print(variations)
-                    # variations = bert_predictions.extract_bert_differences(text, previous, new_text, previous, "car", True)
-                    '''
-                    if new_pronoun == "hers":
-                        for key in variations:
-                            hers_counts[key] += variations[key]
-                    if new_pronoun == "his":
-                        for key in variations:
-                            his_counts[key] += variations[key]
-                    '''
+                    variations = bert_predictions.extract_bert_predictions(new_text, new_previous, relation, True)
                     
+                    if variations == None:
+                        variations = []
+                 
+                    for variation in variations:
+                        sentence_variations[relation][variation] += 1
+               
+               
+            for relation in sentence_variations:                
+                # for each word in the sentence related to this one
+                variations = sentence_variations[relation]
+                for variation in variations:
+                    # for each proposed variation on the related words
+                    for pronoun in pronouns:
+                        # for each pronoun variation
+                        new_text = text
+                        new_previous = previous
+                        for replacement in pronoun:
+                            new_word = pronoun[replacement]
+                            new_text = new_text.replace(replacement, new_word)
+                            new_previous = new_previous.replace(replacement, new_word)
+                            
+                        # TODO REPLACE WITH TOKEN-LEVEL SUBSTITUTION
+                        new_text = new_text.replace(relation, variation)
+                        new_previous = new_previous.replace(relation, variation)
+                        if seen_sentences[new_text] == 0:
+                            seen_sentences[new_text] = 1
+                            
+                            print("NEW WORD: "+variation+" to replace "+relation)
+                            print("NEW CANDIDATE: "+new_text)
+                        
+                            
                     
-            # print(new_lines)
-        
         # get next sentence id
         sent_id = int(line.lstrip("# sent_id = ").strip())
         current_lines = [line]
@@ -199,6 +173,9 @@ for line in sys.stdin:
             previous = line.lstrip("# previous = ").strip()
         if line.startswith("# text = "):
             text = line.lstrip("# text = ").strip()
+            
+    line = fp.readline()
+fp.close()
 
 all_sentences += "".join(current_lines)
 # all_sentences += replace_pronouns(current_lines) # get the last sentence
@@ -227,4 +204,5 @@ for key in diff_counts:
     if value > 1:
         print(key+" "+str(value))    
     
-    
+print(seen_sentences)
+  
