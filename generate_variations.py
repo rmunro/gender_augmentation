@@ -25,6 +25,11 @@ pronouns = [
 {"hers":"yours", "she":"you", "Gender=Fem":"Gender=Neut", "Person=3":"Person=2", "Alex's":"my"}
 ]
 
+pronouns = [
+{"hers":"hers", "she":"she","Gender=Fem":"Gender=Fem"},
+{"hers":"his", "she":"he","Gender=Fem":"Gender=Masc"}
+] # TODO: DELETE LATER
+
 all_sentences = "" # all sentences, old and new
 
 sent_id = 0 # current sentence id
@@ -98,8 +103,8 @@ def replace_in_sentence(lines, replacements, case_sensitive=False):
     new_sentence = get_sentence(new_lines)
     for i in range(0, len(new_lines)):
         line = new_lines[i]
-        line.startswith("# text = ")
-        new_lines[i] = "# text = "+new_sentence
+        if line.startswith("# text = "):
+        	new_lines[i] = "# text = "+new_sentence
         
     return new_lines
     
@@ -209,9 +214,11 @@ while line:
                         # TODO GET POS AND OTHER TAGS FROM REFERERENCE DB FOR relation
                         # MAKE SURE THOSE GET COPIED OVER FOR PRONOUNS TOO
                         new_lines = replace_in_sentence(current_lines, replacements)
-                        next_text = get_sentence(new_lines)
+                        new_text = get_sentence(new_lines)
                         
-                        print("CANDIDATE: "+new_text+" replacing "+relation+" with "+variation)
+                        
+                        # print("CANDIDATE: "+new_text+" replacing "+relation+" with "+variation)
+                        # print(str(new_lines))
                         if seen_sentences[new_text] == 0:
                             seen_sentences[new_text] = 1
                             
