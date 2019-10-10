@@ -255,15 +255,13 @@ def extract_bert_differences(text1, previous1, text2, previous2, tomask, monte_c
                 
                 # get Smoothed Good-Turing estimate to decide when to keep searching
                 seen_total += 1
-                word_counts[max_token1] += 1
-                if word_counts[max_token1] == 1:
+                if word_counts[max_token1+" 1"] == 1:
                     seen_once += 1
-                elif word_counts[max_token1] == 2:
+                elif word_counts[max_token1+" 1"] == 2:
                     seen_once -= 1
-                word_counts[max_token2] += 1
-                if word_counts[max_token2] == 1:
+                if word_counts[max_token2+" 2"] == 1:
                     seen_once += 1
-                elif word_counts[max_token2] == 2:
+                elif word_counts[max_token2+" 2"] == 2:
                     seen_once -= 1
                     
                 good_turing = (seen_once + len(word_counts)) / seen_total
