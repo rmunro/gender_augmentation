@@ -2,6 +2,7 @@ import sys
 import re
 import collections
 from collections import defaultdict    
+import bert_predictions
 
 import torch
 import torch.nn as nn
@@ -120,7 +121,7 @@ for line in sys.stdin:
                     '''
 
                     if new_pronoun == "his":
-                        variations = extract_bert_differences(text, previous, new_text, previous, "car", True)
+                        variations = bert_predictions.extract_bert_differences(text, previous, new_text, previous, "car", True)
                     
 
                         print("VARIATIONS: "+str(variations))
