@@ -80,7 +80,7 @@ def replace_in_sentence(lines, replacements, case_sensitive=False):
     
     '''
     
-    new_lines = ""
+    new_lines = []
     
     for line in lines:
         fields = line.split("\t")
@@ -93,6 +93,7 @@ def replace_in_sentence(lines, replacements, case_sensitive=False):
                             cur_token.lower() == token.lower)):
                     fields[1] = replacement
         new_line = "\t".join(fields)
+        new_lines.append(new_line)
         
     new_sentence = get_sentence(new_lines)
     for i in range(0, len(new_lines)):
@@ -157,7 +158,7 @@ while line:
             parent = get_parent("hers", current_lines)     
             relations = get_dependents(parent, current_lines)
             relations.append(parent)
-            print("relations: "+str(relations)+" in "+text)
+            print("relations: "+str(relations)+" in: '"+text+"'")
 
             # new varia
             sentence_variations = defaultdict(lambda: defaultdict(lambda: 0))
@@ -186,7 +187,7 @@ while line:
                     for variation in variations:
                         sentence_variations[relation][variation] += 1
                
-               
+            print("RELATIONS: "+str(sentence_variations))   
             for relation in sentence_variations:                
                 # for each word in the sentence related to this one
                 variations = sentence_variations[relation]
@@ -201,7 +202,7 @@ while line:
                         for replacement in pronoun:
                             new_word = pronoun[replacement]
                             replacements[replacement] = new_word                            
-                            # new_text = new_text.replace(replacement, new_word)
+                            new_text = new_text.replace(replacement, new_word)
                             new_previous = new_previous.replace(replacement, new_word)
                             
                         replacements[relation] = variation
@@ -210,6 +211,7 @@ while line:
                         new_lines = replace_in_sentence(current_lines, replacements)
                         next_text = get_sentence(new_lines)
                         
+                        print("CANDIDATE: "+new_text+" replacing "+relation+" with "+variation)
                         if seen_sentences[new_text] == 0:
                             seen_sentences[new_text] = 1
                             
