@@ -25,10 +25,13 @@ pronouns = [
 {"hers":"yours", "she":"you", "Gender=Fem":"Gender=Neut", "Person=3":"Person=2", "Alex's":"my"}
 ]
 
+
+'''
 pronouns = [
 {"hers":"hers", "she":"she","Gender=Fem":"Gender=Fem"},
 {"hers":"his", "she":"he","Gender=Fem":"Gender=Masc"}
 ] # TODO: DELETE LATER
+'''
 
 all_sentences = "" # all sentences, old and new
 
@@ -216,7 +219,6 @@ while line:
                         new_lines = replace_in_sentence(current_lines, replacements)
                         new_text = get_sentence(new_lines)
                         
-                        
                         print("CANDIDATE: "+new_text+" replacing "+relation+" with "+variation)
                         # print(str(new_lines))
                         if seen_sentences[new_text] == 0:
@@ -269,4 +271,4 @@ for key in diff_counts:
         print(key+" "+str(value))    
     
 print(seen_sentences)
-  
+print(len(seen_sentences))
