@@ -4,17 +4,13 @@ import collections
 from collections import defaultdict    
 import bert_predictions
 
+'''
 import torch
 import torch.nn as nn
 from transformers import BertTokenizer, BertModel, BertForMaskedLM
 # import logging
 # logging.basicConfig(level=logging.INFO)
-
-# Load pre-trained model, tokenizer, and vocabulary
-bt = BertTokenizer("bert-large-uncased-whole-word-masking-vocab.txt")
-tokenizer = bt.from_pretrained('bert-large-uncased-whole-word-masking')
-model = BertForMaskedLM.from_pretrained('bert-large-uncased-whole-word-masking')
-
+'''
 
 pronouns = [
 {"hers":"hers", "she":"she","Gender=Fem":"Gender=Fem"},
@@ -102,6 +98,54 @@ hers_counts = defaultdict(lambda: 0)
 his_counts = defaultdict(lambda: 0)
 diff_counts = defaultdict(lambda: 0)
 
+
+def get_parent(word, lines):
+    '''Gets the token (string) of the parent of the word in lines
+    assumes that lines is one entry in dependency file, as an array of each line
+    '''
+    parent = 0 
+    
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) > 5 and fields[1].lower() == word.lower():            
+            parent = fields[6]
+        
+    if parent == "0":
+        return word # field is already the root of the tree
+    
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) > 5 and fields[0] == parent:
+            return fields[1]
+            
+    
+    
+
+
+def get_dependents(word, lines, word_number="-1"):
+    '''Gets the token (string) of word in lines
+    assumes each line is the line from one entry in dependency file
+    '''
+    dependents = []
+    
+    if word_number == "-1":        
+        # work out the words position in the sentence if it wasnt passed
+        for line in lines:
+            fields = line.split("\t")
+            if len(fields) > 5 and fields[1].lower() == word.lower():
+                word_number = fields[0]
+                break
+            
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) > 5 and fields[6] == word_number:
+            new_word = fields[1]
+            dependents.append(new_word)
+            dependents.extend(get_dependents(new_word, lines, fields[0]))
+    
+    return dependents
+
+
 for line in sys.stdin:
     # print(line)
     if line.startswith("# sent_id = "):
@@ -110,24 +154,29 @@ for line in sys.stdin:
             # all_sentences += replace_pronouns(current_lines)
             # all_sentences += replace_objects(current_lines)
             
-            if "car " in text:
-            
-                for pronoun in pronouns:
-                    new_pronoun = pronoun["hers"]
-                    new_text = text.replace("hers", new_pronoun)
-                    '''
-                    print("TEXT: "+new_text)
-                    variations = extract_bert_predictions(new_text, previous, "car", True)
-                    '''
+            print(current_lines)
+            parent = get_parent("hers", current_lines)     
+            print(parent)               
+            relations = get_dependents(parent, current_lines)
+            relations.append(parent)
+            print("relations: "+str(relations))
+           
+            for pronoun in pronouns:
+                new_pronoun = pronoun["hers"]
+                new_text = text.replace("hers", new_pronoun)
 
-                    if new_pronoun == "his":
-                        variations = bert_predictions.extract_bert_differences(text, previous, new_text, previous, "car", True)
-                    
-
-                        print("VARIATIONS: "+str(variations))
-                        for key in variations:
-                            diff_counts[key] += variations[key]
-                    
+                new_relations = []
+                for relation in relations:
+                    if relation == "hers":
+                        new_relations.append(new_pronoun.lower())
+                    else:
+                        new_relations.append(relation.lower())
+                                    
+                for relation in new_relations:
+                    variations = bert_predictions.extract_bert_predictions(new_text, previous, relation, True)
+                    print(relation)
+                    print(variations)
+                    # variations = bert_predictions.extract_bert_differences(text, previous, new_text, previous, "car", True)
                     '''
                     if new_pronoun == "hers":
                         for key in variations:
@@ -174,8 +223,8 @@ all_sentences = "\n".join(lines)
 print(hers_counts)
 print(his_counts)
 for key in diff_counts:
-	value = diff_counts[key]
-	if value > 1:
-		print(key+" "+value)	
-	
-	
+    value = diff_counts[key]
+    if value > 1:
+        print(key+" "+str(value))    
+    
+    

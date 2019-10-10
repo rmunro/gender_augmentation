@@ -34,6 +34,10 @@ def extract_bert_predictions(text, previous, tomask, monte_carlo=True, max_sampl
     tokenized_text = tokenizer.tokenize(input)
     
     # MASK the variable
+    if tomask not in tokenized_text:
+        # we got lost in bert tokenization: skip it
+        print("WARNING: could not find "+tomask+" in "+str(tokenized_text))        
+        return
     mask_index = tokenized_text.index(tomask)
     tokenized_text[mask_index] = '[MASK]'
 
