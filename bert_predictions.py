@@ -1,3 +1,11 @@
+#!/usr/bin/env python
+
+"""BERT PREDICTIONS
+
+A collection of functions to probe BERT for bias
+
+"""
+
 from collections import defaultdict    
 
 import torch
@@ -12,13 +20,14 @@ tokenizer = bt.from_pretrained('bert-large-uncased-whole-word-masking')
 model = BertForMaskedLM.from_pretrained('bert-large-uncased-whole-word-masking')
 
 
-def extract_bert_predictions(text, previous, tomask, monte_carlo=True, max_samples=100, good_turing_threshold=0.05):
+def extract_bert_predictions(text, previous, tomask, also_mask=[], monte_carlo=True, max_samples=100, good_turing_threshold=0.05):
     """Get predictions for new words in the given contexts
         
     Keyword arguments:
         text -- the sentence with the word to mask
         previous -- the previous sentence
-        tomask -- the word to mask
+        tomask -- the word to mask and predict against
+        also_mask -- words to also mask
         monte_carlo -- whether to use Monte-Carlo Dropouts to get multiple predictions
         max_samples -- hard limit on the number of samples from Monte Carlo Dropouts
         good_turing_threshold -- threshold for when to stop looking for new words, as a percent likelihood that a novel prediction will be discovered      
@@ -38,8 +47,16 @@ def extract_bert_predictions(text, previous, tomask, monte_carlo=True, max_sampl
         # we got lost in bert tokenization: skip it
         print("WARNING: could not find "+tomask+" in "+str(tokenized_text))        
         return
-    mask_index = tokenized_text.index(tomask)
-    tokenized_text[mask_index] = '[MASK]'
+    
+    mask_index = 0
+    for i in range(0, len(tokenized_text)): 
+        if tokenized_text[i] == tomask:
+            tokenized_text[i] = '[MASK]'
+            mask_index = i
+
+    for i in range(0, len(tokenized_text)): 
+        if tokenized_text[i] in also_mask:
+            tokenized_text[i] = '[MASK]'
 
     # Convert the tokenized sentences to tensors for pytorch  
     indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
@@ -58,9 +75,7 @@ def extract_bert_predictions(text, previous, tomask, monte_carlo=True, max_sampl
                 outputs = model(tokens_tensor, token_type_ids=segments_tensors) 
                 predictions = outputs[0]
                 predicted_index = torch.argmax(predictions[0, mask_index]).item()
-                predicted_token = tokenizer.convert_ids_to_tokens([predicted_index])[0]
-                # print("Predicted token:")
-                # print(predicted_token)
+                predicted_token = tokenizer.convert_ids_to_tokens([predicted_index])[0]                
                 
                 # get Smoothed Good-Turing estimate to decide when to keep searching
                 seen_total += 1
@@ -86,7 +101,49 @@ def extract_bert_predictions(text, previous, tomask, monte_carlo=True, max_sampl
             # print(predictions[0, mask_index])
             
     return word_counts
-       
+
+def get_hers_his_theirs_difference(text, previous):
+    """ Get the difference in prediction for "hers" and "his" in a sentence with "hers"
+    
+    """
+    
+    input = "[CLS] "+previous+" [SEP] "+text+" [SEP]"
+    tokenized_text = tokenizer.tokenize(input)
+    
+    # MASK the variable
+    mask_index = tokenized_text.index("hers")
+    tokenized_text[mask_index] = '[MASK]'
+        
+    # Convert the tokenized sentences to tensors for pytorch  
+    indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
+    sep_index = tokenized_text.index("[SEP]")
+    segments_ids = [1] * len(tokenized_text)
+    for i in range(0, sep_index+1):
+        segments_ids[i] = 0
+    tokens_tensor = torch.tensor([indexed_tokens])
+    segments_tensors = torch.tensor([segments_ids])
+ 
+    hers_ind, his_ind, theirs_ind = tokenizer.convert_tokens_to_ids(["hers", "his", "theirs"])
+      
+     # Get predictions for masked word
+    with torch.no_grad():
+        model.eval()
+        outputs = model(tokens_tensor, token_type_ids=segments_tensors) 
+        predictions = outputs[0]
+        
+        pron = predictions[0, mask_index]
+        
+        prob_dist = torch.nn.functional.softmax(predictions[0, mask_index],dim=0)
+        hers_pred = prob_dist[hers_ind].item()
+        his_pred = prob_dist[his_ind].item()
+        theirs_pred = prob_dist[theirs_ind].item()
+        
+        diff = hers_pred - his_pred
+        if diff < 0:
+            diff = 0-diff
+            
+        return [diff, hers_pred, his_pred, theirs_pred]       
+               
        
 def extract_bert_differences(text1, previous1, text2, previous2, tomask, monte_carlo=True, max_samples=100, good_turing_threshold=0.05):
     """Get the words with the greatest difference in prediction score 
@@ -227,5 +284,5 @@ def extract_bert_differences(text1, previous1, text2, previous2, tomask, monte_c
             word_counts[max_token2+" 2"] += 1
             
     return word_counts
-           
-    
+
+       

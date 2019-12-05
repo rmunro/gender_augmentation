@@ -6,23 +6,26 @@ from collections import defaultdict
 import bert_predictions
 
 
-seed_data = "./new_sentences.conllu"
+seed_data = "./UD_English-Pronouns/en_pronouns-ud-test.conllu"
 reference_data = "./ud-treebanks-v2.4/UD_English-LinES/en_lines-ud-train.conllu"
+
+seed_data = "./new_sentences.conllu"
 
 if not os.path.exists(seed_data):
     print("No file found: "+seed_data+"\nThis should contain your starting files")
 
+'''
 if not os.path.exists(reference_data):
     print("No file found: "+reference_data+"\nTry downloading via:\ncurl --remote-name-all https://lindat.mff.cuni.cz/repository/xmlui/bitstream/handle/11234/1-2988{/ud-treebanks-v2.4.tgz,/ud-documentation-v2.4.tgz,/ud-tools-v2.4.tgz}")
-
+'''
 
 # all replacements for the example sentences
 pronouns = [
-{"hers":"hers", "she":"she","Gender=Fem":"Gender=Fem"},
-{"hers":"his", "she":"he","Gender=Fem":"Gender=Masc"},
-{"hers":"theirs", "she":"they", "Gender=Fem":"Gender=Neut"},
-{"hers":"mine", "she":"me","Gender=Fem":"Gender=Neut", "Person=3":"Person=1", "Alex's":"your"},
-{"hers":"yours", "she":"you", "Gender=Fem":"Gender=Neut", "Person=3":"Person=2", "Alex's":"my"}
+{"hers":"hers", "Hers":"Hers", "she":"she","Gender=Fem":"Gender=Fem"},
+{"hers":"his", "Hers":"His", "she":"he","Gender=Fem":"Gender=Masc"},
+{"hers":"theirs", "Hers":"Theirs", "she":"they", "Gender=Fem":"Gender=Neut"},
+{"hers":"mine", "Hers":"Mine", "she":"me","Gender=Fem":"Gender=Neut", "Person=3":"Person=1", "Alex's":"your"},
+{"hers":"yours", "Hers":"Yours", "she":"you", "Gender=Fem":"Gender=Neut", "Person=3":"Person=2", "Alex's":"my"}
 ]
 
 
@@ -70,6 +73,7 @@ def get_parent(word, lines):
 def get_sentence(lines):
     '''Gets the text sentence from the lines
     
+    TODO: add code to ignore morphemes
     '''
     
     text_sentence = ""
@@ -137,6 +141,20 @@ def get_dependents(word, lines, word_number="-1"):
     return dependents
 
 
+def replace_pronouns(lines):
+    ''' Code to replace all pronouns
+    
+    '''
+    new_lines = ""
+    for pronoun in pronouns:
+        for line in lines:
+            for old_pronoun in pronoun:
+                new_pronoun = pronoun[old_pronoun]
+                line = line.replace(old_pronoun, new_pronoun)
+            new_lines += line
+    return new_lines
+
+
 reference_dependencies = defaultdict(lambda: defaultdict(lambda: 0))
 
 fp = open(reference_data, 'r')
@@ -153,6 +171,7 @@ while line:
 fp.close()
 
 
+
 seen_sentences = defaultdict(lambda: 0)
 
 fp = open(seed_data, 'r')
@@ -161,19 +180,27 @@ while line:
     # print(line)
     if line.startswith("# sent_id = "):
         if sent_id > 0: 
-            all_sentences += "".join(current_lines)            
+            # all_sentences += "".join(current_lines)            
+ 
+            # print("looking at "+text)
+            diff, hers, his = bert_predictions.get_hers_his_difference(text, previous)
+            print(str(diff)+" "+str(hers)+" "+str(his)+" "+text)
+            
+            all_sentences += replace_pronouns(current_lines)
+            # print(new_lines)
             
             parent = get_parent("hers", current_lines)     
             relations = get_dependents(parent, current_lines)
             relations.append(parent)
-            print("relations: "+str(relations)+" in: '"+text+"'")
+            # print("relations: "+str(relations)+" in: '"+text+"'")
 
-            # new varia
+            # new variations
             sentence_variations = defaultdict(lambda: defaultdict(lambda: 0))
            
             for pronoun in pronouns:
                 new_text = text
-                new_previous = previous
+                new_previous = previous                               
+                
                 for replacement in pronoun:
                     new_word = pronoun[replacement]
                     new_text = new_text.replace(replacement, new_word)
@@ -185,9 +212,12 @@ while line:
                     if relation != "hers":
                         #skip the actual pronoun: we are controlling for its variation
                         new_relations.append(relation.lower())
-                                    
+                    
+                new_relations = [] # TODO REMOVE                
                 for relation in new_relations:
+                    print("getting variations "+str(relation))
                     variations = bert_predictions.extract_bert_predictions(new_text, new_previous, relation, True)
+                    print(str(variations))
                     
                     if variations == None:
                         variations = []
@@ -195,7 +225,7 @@ while line:
                     for variation in variations:
                         sentence_variations[relation][variation] += 1
                
-            print("RELATIONS: "+str(sentence_variations))   
+            #print("RELATIONS: "+str(sentence_variations))   
             for relation in sentence_variations:                
                 # for each word in the sentence related to this one
                 variations = sentence_variations[relation]
@@ -243,8 +273,8 @@ while line:
     line = fp.readline()
 fp.close()
 
-all_sentences += "".join(current_lines)
-# all_sentences += replace_pronouns(current_lines) # get the last sentence
+# all_sentences += "".join(current_lines)
+all_sentences += replace_pronouns(current_lines) # get the last sentence
 
 # print(all_sentences)
 
@@ -263,12 +293,10 @@ for i in range(0, len(lines)):
 all_sentences = "\n".join(lines)
 
 # print(all_sentences, end = "")
-print(hers_counts)
-print(his_counts)
 for key in diff_counts:
     value = diff_counts[key]
     if value > 1:
         print(key+" "+str(value))    
     
-print(seen_sentences)
-print(len(seen_sentences))
+# print(seen_sentences)
+# print(all_sentences)
